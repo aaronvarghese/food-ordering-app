@@ -1,4 +1,4 @@
-package com.upgrad.FoodOrderingApp.api.provider;
+package com.upgrad.FoodOrderingApp.api.controller.provider;
 
 import com.upgrad.FoodOrderingApp.service.exception.AuthenticationFailedException;
 

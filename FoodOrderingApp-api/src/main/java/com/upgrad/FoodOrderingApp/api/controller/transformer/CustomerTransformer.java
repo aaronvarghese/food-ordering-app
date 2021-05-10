@@ -1,4 +1,4 @@
-package com.upgrad.FoodOrderingApp.api.transformer;
+package com.upgrad.FoodOrderingApp.api.controller.transformer;
 
 import com.upgrad.FoodOrderingApp.api.model.LoginResponse;
 import com.upgrad.FoodOrderingApp.api.model.LogoutResponse;

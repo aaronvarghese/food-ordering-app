@@ -1,4 +1,4 @@
-package com.upgrad.FoodOrderingApp.api.ext;
+package com.upgrad.FoodOrderingApp.api.controller.ext;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
