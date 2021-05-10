@@ -1,109 +1,325 @@
-package com.upgrad.FoodOrderingApp.api.exception;
+package com.upgrad.FoodOrderingApp.api.controller;
 
-import com.upgrad.FoodOrderingApp.api.model.ErrorResponse;
-import com.upgrad.FoodOrderingApp.service.exception.*;
+import com.upgrad.FoodOrderingApp.api.model.*;
+import com.upgrad.FoodOrderingApp.service.businness.CategoryService;
+import com.upgrad.FoodOrderingApp.service.businness.CustomerService;
+import com.upgrad.FoodOrderingApp.service.businness.ItemService;
+import com.upgrad.FoodOrderingApp.service.businness.RestaurantService;
+import com.upgrad.FoodOrderingApp.service.entity.*;
+import com.upgrad.FoodOrderingApp.service.exception.AuthorizationFailedException;
+import com.upgrad.FoodOrderingApp.service.exception.CategoryNotFoundException;
+import com.upgrad.FoodOrderingApp.service.exception.InvalidRatingException;
+import com.upgrad.FoodOrderingApp.service.exception.RestaurantNotFoundException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.ControllerAdvice;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.bind.annotation.*;
 
-@ControllerAdvice
-public class RestExceptionHandler {
+import java.math.BigDecimal;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.UUID;
 
-    @ExceptionHandler(SignUpRestrictedException.class)
-    public ResponseEntity<ErrorResponse> signUpRestrictedException(
-            SignUpRestrictedException exe, WebRequest request) {
-        return new ResponseEntity<ErrorResponse>(
-                new ErrorResponse().code(exe.getCode()).message(exe.getErrorMessage()),
-                HttpStatus.BAD_REQUEST);
+@CrossOrigin
+@RestController
+@RequestMapping("/restaurant")
+public class RestaurantController {
+
+  @Autowired RestaurantService restaurantService;
+
+  @Autowired CategoryService categoryService;
+
+  @Autowired ItemService itemService;
+
+  @Autowired CustomerService customerService;
+
+  @CrossOrigin
+  @RequestMapping(
+      method = RequestMethod.GET,
+      path = "",
+      produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
+  public ResponseEntity<RestaurantListResponse> getAllRestaurants() {
+
+    List<RestaurantEntity> restaurantEntities = restaurantService.restaurantsByRating();
+
+    List<RestaurantList> restaurantLists = new LinkedList<>();
+    for (RestaurantEntity restaurantEntity : restaurantEntities) {
+
+      List<CategoryEntity> categoryEntities =
+          categoryService.getCategoriesByRestaurant(restaurantEntity.getUuid());
+      String categories = new String();
+      ListIterator<CategoryEntity> listIterator = categoryEntities.listIterator();
+      while (listIterator.hasNext()) {
+        categories = categories + listIterator.next().getCategoryName();
+        if (listIterator.hasNext()) {
+          categories = categories + ", ";
+        }
+      }
+
+      RestaurantDetailsResponseAddressState restaurantDetailsResponseAddressState =
+          new RestaurantDetailsResponseAddressState()
+              .id(UUID.fromString(restaurantEntity.getAddress().getState().getUuid()))
+              .stateName(restaurantEntity.getAddress().getState().getState_name());
+
+      RestaurantDetailsResponseAddress restaurantDetailsResponseAddress =
+          new RestaurantDetailsResponseAddress()
+              .id(UUID.fromString(restaurantEntity.getAddress().getUuid()))
+              .city(restaurantEntity.getAddress().getCity())
+              .flatBuildingName(restaurantEntity.getAddress().getFlatBuilNo())
+              .locality(restaurantEntity.getAddress().getLocality())
+              .pincode(restaurantEntity.getAddress().getPincode())
+              .state(restaurantDetailsResponseAddressState);
+
+      RestaurantList restaurantList =
+          new RestaurantList()
+              .id(UUID.fromString(restaurantEntity.getUuid()))
+              .restaurantName(restaurantEntity.getRestaurantName())
+              .averagePrice(restaurantEntity.getAvgPrice())
+              .categories(categories)
+              .customerRating(BigDecimal.valueOf(restaurantEntity.getCustomerRating()))
+              .numberCustomersRated(restaurantEntity.getNumberCustomersRated())
+              .photoURL(restaurantEntity.getPhotoUrl())
+              .address(restaurantDetailsResponseAddress);
+
+      restaurantLists.add(restaurantList);
     }
 
-    @ExceptionHandler(AuthenticationFailedException.class)
-    public ResponseEntity<ErrorResponse> authenticationFailedException(
-            AuthenticationFailedException exe, WebRequest request) {
-        return new ResponseEntity<ErrorResponse>(
-                new ErrorResponse().code(exe.getCode()).message(exe.getErrorMessage()),
-                HttpStatus.UNAUTHORIZED);
+    RestaurantListResponse restaurantListResponse =
+        new RestaurantListResponse().restaurants(restaurantLists);
+    return new ResponseEntity<RestaurantListResponse>(restaurantListResponse, HttpStatus.OK);
+  }
+
+  @CrossOrigin
+  @RequestMapping(
+      method = RequestMethod.GET,
+      path = "/name/{restaurant_name}",
+      produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
+  public ResponseEntity<RestaurantListResponse> getRestaurantByName(
+      @PathVariable(value = "restaurant_name") final String restaurantName)
+      throws RestaurantNotFoundException {
+
+    List<RestaurantEntity> restaurantEntities = restaurantService.restaurantsByName(restaurantName);
+
+    if (!restaurantEntities.isEmpty()) {
+
+      List<RestaurantList> restaurantLists = new LinkedList<>();
+      for (RestaurantEntity restaurantEntity : restaurantEntities) {
+
+        List<CategoryEntity> categoryEntities =
+            categoryService.getCategoriesByRestaurant(restaurantEntity.getUuid());
+        String categories = new String();
+        ListIterator<CategoryEntity> listIterator = categoryEntities.listIterator();
+        while (listIterator.hasNext()) {
+          categories = categories + listIterator.next().getCategoryName();
+          if (listIterator.hasNext()) {
+            categories = categories + ", ";
+          }
+        }
+
+        AddressEntity addressEntity = restaurantEntity.getAddress();
+        StateEntity stateEntity = addressEntity.getState();
+        String stateName, uuid;
+        if (stateEntity != null) {
+          stateName = stateEntity.getState_name();
+          uuid = stateEntity.getUuid();
+        } else {
+          uuid = null;
+          stateName = null;
+        }
+        UUID id = uuid != null ? UUID.fromString(uuid) : null;
+        RestaurantDetailsResponseAddressState restaurantDetailsResponseAddressState =
+            new RestaurantDetailsResponseAddressState().id(id).stateName(stateName);
+        String addressUUID = addressEntity.getUuid();
+        UUID addressID;
+        if (addressUUID == null) addressID = null;
+        else addressID = UUID.fromString(addressUUID);
+        RestaurantDetailsResponseAddress restaurantDetailsResponseAddress =
+            new RestaurantDetailsResponseAddress()
+                .id(addressID)
+                .city(restaurantEntity.getAddress().getCity())
+                .flatBuildingName(restaurantEntity.getAddress().getFlatBuilNo())
+                .locality(restaurantEntity.getAddress().getLocality())
+                .pincode(restaurantEntity.getAddress().getPincode())
+                .state(restaurantDetailsResponseAddressState);
+
+        RestaurantList restaurantList =
+            new RestaurantList()
+                .id(UUID.fromString(restaurantEntity.getUuid()))
+                .restaurantName(restaurantEntity.getRestaurantName())
+                .averagePrice(restaurantEntity.getAvgPrice())
+                .categories(categories)
+                .customerRating(BigDecimal.valueOf(restaurantEntity.getCustomerRating()))
+                .numberCustomersRated(restaurantEntity.getNumberCustomersRated())
+                .photoURL(restaurantEntity.getPhotoUrl())
+                .address(restaurantDetailsResponseAddress);
+
+        restaurantLists.add(restaurantList);
+      }
+
+      RestaurantListResponse restaurantListResponse =
+          new RestaurantListResponse().restaurants(restaurantLists);
+      return new ResponseEntity<RestaurantListResponse>(restaurantListResponse, HttpStatus.OK);
+    } else {
+      return new ResponseEntity<RestaurantListResponse>(
+          new RestaurantListResponse(), HttpStatus.OK);
+    }
+  }
+
+  @CrossOrigin
+  @RequestMapping(
+      method = RequestMethod.GET,
+      path = "/category/{category_id}",
+      produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
+  public ResponseEntity<RestaurantListResponse> getRestaurantByCategoryId(
+      @PathVariable(value = "category_id") String categoryId) throws CategoryNotFoundException {
+
+    List<RestaurantEntity> restaurantEntities = restaurantService.restaurantByCategory(categoryId);
+
+    List<RestaurantList> restaurantLists = new LinkedList<>();
+    for (RestaurantEntity restaurantEntity : restaurantEntities) {
+
+      List<CategoryEntity> categoryEntities =
+          categoryService.getCategoriesByRestaurant(restaurantEntity.getUuid());
+      String categories = new String();
+      ListIterator<CategoryEntity> listIterator = categoryEntities.listIterator();
+      while (listIterator.hasNext()) {
+        categories = categories + listIterator.next().getCategoryName();
+        if (listIterator.hasNext()) {
+          categories = categories + ", ";
+        }
+      }
+
+      RestaurantDetailsResponseAddressState restaurantDetailsResponseAddressState =
+          new RestaurantDetailsResponseAddressState()
+              .id(UUID.fromString(restaurantEntity.getAddress().getState().getUuid()))
+              .stateName(restaurantEntity.getAddress().getState().getState_name());
+
+      RestaurantDetailsResponseAddress restaurantDetailsResponseAddress =
+          new RestaurantDetailsResponseAddress()
+              .id(UUID.fromString(restaurantEntity.getAddress().getUuid()))
+              .city(restaurantEntity.getAddress().getCity())
+              .flatBuildingName(restaurantEntity.getAddress().getFlatBuilNo())
+              .locality(restaurantEntity.getAddress().getLocality())
+              .pincode(restaurantEntity.getAddress().getPincode())
+              .state(restaurantDetailsResponseAddressState);
+
+      RestaurantList restaurantList =
+          new RestaurantList()
+              .id(UUID.fromString(restaurantEntity.getUuid()))
+              .restaurantName(restaurantEntity.getRestaurantName())
+              .averagePrice(restaurantEntity.getAvgPrice())
+              .categories(categories)
+              .customerRating(BigDecimal.valueOf(restaurantEntity.getCustomerRating()))
+              .numberCustomersRated(restaurantEntity.getNumberCustomersRated())
+              .photoURL(restaurantEntity.getPhotoUrl())
+              .address(restaurantDetailsResponseAddress);
+
+      restaurantLists.add(restaurantList);
     }
 
-    @ExceptionHandler(AuthorizationFailedException.class)
-    public ResponseEntity<ErrorResponse> authorizationFailedException(
-            AuthorizationFailedException exe, WebRequest request) {
-        return new ResponseEntity<ErrorResponse>(
-                new ErrorResponse().code(exe.getCode()).message(exe.getErrorMessage()),
-                HttpStatus.FORBIDDEN);
+    RestaurantListResponse restaurantListResponse =
+        new RestaurantListResponse().restaurants(restaurantLists);
+    return new ResponseEntity<RestaurantListResponse>(restaurantListResponse, HttpStatus.OK);
+  }
+
+  @CrossOrigin
+  @RequestMapping(
+      method = RequestMethod.GET,
+      path = "/{restaurant_id}",
+      produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
+  public ResponseEntity<RestaurantDetailsResponse> getRestaurantByRestaurantId(
+      @PathVariable(value = "restaurant_id") final String restaurantUuid)
+      throws RestaurantNotFoundException {
+
+    RestaurantEntity restaurantEntity = restaurantService.restaurantByUUID(restaurantUuid);
+
+    List<CategoryEntity> categoryEntities =
+        categoryService.getCategoriesByRestaurant(restaurantUuid);
+
+    List<CategoryList> categoryLists = new LinkedList<>();
+    for (CategoryEntity categoryEntity :
+        categoryEntities) { // Looping for each CategoryEntity in categoryEntities
+
+      List<ItemEntity> itemEntities =
+          itemService.getItemsByCategoryAndRestaurant(restaurantUuid, categoryEntity.getUuid());
+      List<ItemList> itemLists = new LinkedList<>();
+      itemEntities.forEach(
+          itemEntity -> {
+            ItemList itemList =
+                new ItemList()
+                    .id(UUID.fromString(itemEntity.getUuid()))
+                    .itemName(itemEntity.getItemName())
+                    .price(itemEntity.getPrice())
+                    .itemType(ItemList.ItemTypeEnum.valueOf(itemEntity.getType().getValue()));
+
+            itemLists.add(itemList);
+          });
+
+      CategoryList categoryList =
+          new CategoryList()
+              .itemList(itemLists)
+              .id(UUID.fromString(categoryEntity.getUuid()))
+              .categoryName(categoryEntity.getCategoryName());
+
+      categoryLists.add(categoryList);
     }
 
-    @ExceptionHandler(UpdateCustomerException.class)
-    public ResponseEntity<ErrorResponse> updateCustomerException(
-            UpdateCustomerException exe, WebRequest request) {
-        return new ResponseEntity<ErrorResponse>(
-                new ErrorResponse().code(exe.getCode()).message(exe.getErrorMessage()),
-                HttpStatus.BAD_REQUEST);
-    }
+    RestaurantDetailsResponseAddressState restaurantDetailsResponseAddressState =
+        new RestaurantDetailsResponseAddressState()
+            .id(UUID.fromString(restaurantEntity.getAddress().getState().getUuid()))
+            .stateName(restaurantEntity.getAddress().getState().getState_name());
 
-    @ExceptionHandler(AddressNotFoundException.class)
-    public ResponseEntity<ErrorResponse> addressNotFoundException(
-            AddressNotFoundException exe, WebRequest request) {
-        return new ResponseEntity<ErrorResponse>(
-                new ErrorResponse().code(exe.getCode()).message(exe.getErrorMessage()),
-                HttpStatus.NOT_FOUND);
-    }
+    RestaurantDetailsResponseAddress restaurantDetailsResponseAddress =
+        new RestaurantDetailsResponseAddress()
+            .id(UUID.fromString(restaurantEntity.getAddress().getUuid()))
+            .city(restaurantEntity.getAddress().getCity())
+            .flatBuildingName(restaurantEntity.getAddress().getFlatBuilNo())
+            .locality(restaurantEntity.getAddress().getLocality())
+            .pincode(restaurantEntity.getAddress().getPincode())
+            .state(restaurantDetailsResponseAddressState);
 
-    @ExceptionHandler(SaveAddressException.class)
-    public ResponseEntity<ErrorResponse> saveAddressException(
-            SaveAddressException exe, WebRequest request) {
-        return new ResponseEntity<ErrorResponse>(
-                new ErrorResponse().code(exe.getCode()).message(exe.getErrorMessage()),
-                HttpStatus.BAD_REQUEST);
-    }
+    RestaurantDetailsResponse restaurantDetailsResponse =
+        new RestaurantDetailsResponse()
+            .restaurantName(restaurantEntity.getRestaurantName())
+            .address(restaurantDetailsResponseAddress)
+            .averagePrice(restaurantEntity.getAvgPrice())
+            .customerRating(BigDecimal.valueOf(restaurantEntity.getCustomerRating()))
+            .numberCustomersRated(restaurantEntity.getNumberCustomersRated())
+            .id(UUID.fromString(restaurantEntity.getUuid()))
+            .photoURL(restaurantEntity.getPhotoUrl())
+            .categories(categoryLists);
 
-    @ExceptionHandler(RestaurantNotFoundException.class)
-    public ResponseEntity<ErrorResponse> restaurantNotFoundException(
-            RestaurantNotFoundException exc, WebRequest request) {
-        return new ResponseEntity<ErrorResponse>(
-                new ErrorResponse().code(exc.getCode()).message(exc.getErrorMessage()),
-                HttpStatus.NOT_FOUND);
-    }
+    return new ResponseEntity<RestaurantDetailsResponse>(restaurantDetailsResponse, HttpStatus.OK);
+  }
 
-    @ExceptionHandler(CategoryNotFoundException.class)
-    public ResponseEntity<ErrorResponse> categoryNotFoundException(
-            CategoryNotFoundException exc, WebRequest request) {
-        return new ResponseEntity<ErrorResponse>(
-                new ErrorResponse().code(exc.getCode()).message(exc.getErrorMessage()),
-                HttpStatus.NOT_FOUND);
-    }
+  @CrossOrigin
+  @RequestMapping(
+      method = RequestMethod.PUT,
+      path = "/{restaurant_id}",
+      params = "customer_rating",
+      produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
+  public ResponseEntity<RestaurantUpdatedResponse> updateRestaurantDetails(
+      @RequestHeader("authorization") final String authorization,
+      @PathVariable(value = "restaurant_id") final String restaurantUuid,
+      @RequestParam(value = "customer_rating") final Double customerRating)
+      throws AuthorizationFailedException, RestaurantNotFoundException, InvalidRatingException {
 
-    @ExceptionHandler(InvalidRatingException.class)
-    public ResponseEntity<ErrorResponse> invalidRatingException(
-            InvalidRatingException exc, WebRequest request) {
-        return new ResponseEntity<ErrorResponse>(
-                new ErrorResponse().code(exc.getCode()).message(exc.getErrorMessage()),
-                HttpStatus.BAD_REQUEST);
-    }
+    final String accessToken = authorization.split("Bearer ")[1];
 
-    @ExceptionHandler(CouponNotFoundException.class)
-    public ResponseEntity<ErrorResponse> couponNotFoundException(
-            CouponNotFoundException exc, WebRequest request) {
-        return new ResponseEntity<ErrorResponse>(
-                new ErrorResponse().code(exc.getCode()).message(exc.getErrorMessage()),
-                HttpStatus.NOT_FOUND);
-    }
+    CustomerEntity customerEntity = customerService.getCustomer(accessToken);
 
-    @ExceptionHandler(PaymentMethodNotFoundException.class)
-    public ResponseEntity<ErrorResponse> paymentMethodNotFoundException(
-            PaymentMethodNotFoundException exc, WebRequest request) {
-        return new ResponseEntity<ErrorResponse>(
-                new ErrorResponse().code(exc.getCode()).message(exc.getErrorMessage()),
-                HttpStatus.NOT_FOUND);
-    }
+    RestaurantEntity restaurantEntity = restaurantService.restaurantByUUID(restaurantUuid);
 
-    @ExceptionHandler(ItemNotFoundException.class)
-    public ResponseEntity<ErrorResponse> itemNotFoundException(
-            ItemNotFoundException exc, WebRequest request) {
-        return new ResponseEntity<ErrorResponse>(
-                new ErrorResponse().code(exc.getCode()).message(exc.getErrorMessage()),
-                HttpStatus.NOT_FOUND);
-    }
+    RestaurantEntity updatedRestaurantEntity =
+        restaurantService.updateRestaurantRating(restaurantEntity, customerRating);
+
+    RestaurantUpdatedResponse restaurantUpdatedResponse =
+        new RestaurantUpdatedResponse()
+            .id(UUID.fromString(restaurantUuid))
+            .status("RESTAURANT RATING UPDATED SUCCESSFULLY");
+
+    return new ResponseEntity<RestaurantUpdatedResponse>(restaurantUpdatedResponse, HttpStatus.OK);
+  }
 }
